@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Fake Review Detector",
+  "version": "1.0",
+  "description": "Detects fake Amazon reviews in real time",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "https://www.amazon.com/*",
+    "https://www.amazon.in/*",
+    "https://www.amazon.co.uk/*",
+    "https://www.amazon.ca/*"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.amazon.com/*",
+        "https://www.amazon.in/*",
+        "https://www.amazon.co.uk/*",
+        "https://www.amazon.ca/*"
+      ],
+      "js": ["content.js"]
+    }
+  ]
+}

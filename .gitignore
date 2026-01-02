@@ -1,0 +1,7 @@
+setup_project.py
+
+/backend/model/
+
+/backend/venv/
+
+fake_reviews_dataset.csv
