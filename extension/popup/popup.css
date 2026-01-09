@@ -1,0 +1,4 @@
+.fake { color: red; }
+.genuine { color: green; }
+.uncertain { color: orange; }
+#explanation { font-style: italic; margin-top: 10px; }

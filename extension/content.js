@@ -92,6 +92,32 @@ function extractReviews() {
     return span;
   }
 
+  function highlightKeywordsInNode(root, keywords) {
+  const walker = document.createTreeWalker(
+    root,
+    NodeFilter.SHOW_TEXT,
+    null,
+    false
+  );
+
+  let node;
+  while ((node = walker.nextNode())) {
+    keywords.forEach(word => {
+      if (!word || word.length < 3) return;
+      const regex = new RegExp(`\\b(${word})\\b`, 'gi');
+      if (regex.test(node.nodeValue)) {
+        const span = document.createElement('span');
+        span.innerHTML = node.nodeValue.replace(
+          regex,
+          `<mark style="background:#ffe082;padding:1px;">$1</mark>`
+        );
+        node.parentNode.replaceChild(span, node);
+      }
+    });
+  }
+}
+
+
   async function annotateReview(r) {
     const badge = makeBadge(r.result.label, r.result.confidence ?? 0);
     // remove previous badge if exists
@@ -101,6 +127,23 @@ function extractReviews() {
     const header = qs(r.node, ['.a-row', '.review-header', '.a-profile']);
     if (header) header.insertAdjacentElement('afterend', badge);
     else r.node.appendChild(badge);
+
+    //-----PHASE 3 MODIFICATION-----
+    if(explanation){
+      let expl=r.node.querySelector('.reviewguard-expl');
+      if(!expl){
+        expl=document.createElement('div');
+        expl.className='reviewguard-expl';
+        expl.style.cssText=
+        'margin-top:4px;font-size:12px;color:#555;font-style:italic;';
+        badge.insertAdjacentElement('afterend', expl);
+      }
+      expl.textContent=explanation;
+    }
+
+    if(keypwrds.length){
+      highlightKeywordsInNode(r.node,keywords);
+    }
   }
 
   async function analyzeAllReviews(ev) {

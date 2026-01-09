@@ -5,8 +5,10 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Embedding, Bidirectional, LSTM, Dense, Multiply, Layer
+from tensorflow.keras import backend as K
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import classification_report,confusion_matrix
 import pickle
 import os
 import re
@@ -32,8 +34,11 @@ texts = texts.apply(clean_text)
 # -----------------------------
 # Encode labels (CG=0, OR=1)
 # -----------------------------
-encoder = LabelEncoder()
-labels = encoder.fit_transform(labels)
+# encoder = LabelEncoder()
+# labels = encoder.fit_transform(labels)
+
+label_mapping = {'CG': 0, 'OR': 1}    #CG=Genuine OR= Fake
+labels = labels.map(label_mapping).values
 
 # -----------------------------
 # Tokenize text
@@ -55,35 +60,30 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 # Define Custom Positional Attention Layer (CORRECTED)
 # -----------------------------
 class PositionalAttention(Layer):
-    def __init__(self, **kwargs):
-        super(PositionalAttention, self).__init__(**kwargs)
+    def __init__(self, max_len=150, **kwargs):
+        super().__init__(**kwargs)
         self.score_dense = Dense(128, activation='tanh')
-        # 1. Dense layer to create the attention scores (logits)
-        self.att_dense = Dense(1) 
-        # 2. Softmax layer to apply on the sequence axis (axis=1)
+        self.att_dense = Dense(1)
         self.softmax = tf.keras.layers.Softmax(axis=1)
-        self.multiply = Multiply()
+        self.pos_embedding = Embedding(max_len, 128)
 
-    def call(self, inputs):
-        # inputs shape: (batch, seq_len, hidden_dim) -> (None, 150, 128)
-        
-        # Shape: (None, 150, 128)
-        score = self.score_dense(inputs)
-        
-        # Shape: (None, 150, 1)
-        att_score = self.att_dense(score) 
-        
-        # Shape: (None, 150, 1) -> Softmax is applied across the 150 timesteps
-        attention = self.softmax(att_score) 
-        
-        # Shape: (None, 150, 128)
-        weighted = self.multiply([inputs, attention]) 
-        
-        # Shape: (None, 128)
-        context = tf.reduce_sum(weighted, axis=1) 
-        
+    def call(self, inputs,return_attention=False):
+        seq_len = tf.shape(inputs)[1]
+        positions = tf.range(start=0, limit=seq_len, delta=1)
+        pos_embed = self.pos_embedding(positions)
+
+        x = inputs + pos_embed
+        score = self.score_dense(x)
+        att_score = self.att_dense(score)
+        attention = self.softmax(att_score)
+
+        weighted = inputs * attention
+        context=K.sum(weighted, axis=1)
+
+        if return_attention:
+            return context, attention
         return context
-    
+
     
 # -----------------------------
 # Model architecture
@@ -103,7 +103,7 @@ model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy']
 # -----------------------------
 # Train with class weights and early stopping
 # -----------------------------
-class_weights = {0:1.0, 1:1.5}
+# class_weights = {0:1.0, 1:1.5}
 early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
 
 model.fit(
@@ -111,9 +111,19 @@ model.fit(
     validation_data=(X_test, y_test),
     epochs=10,
     batch_size=64,
-    class_weight=class_weights,
+    #class_weight=class_weights,
     callbacks=[early_stop]
 )
+# -----------------------------
+# Evaluation Metrics (Phase 1 - Mandatory)
+# -----------------------------
+y_pred = (model.predict(X_test) > 0.5).astype(int)
+
+print("\nConfusion Matrix:")
+print(confusion_matrix(y_test, y_pred))
+
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred, target_names=['CG', 'OR']))
 
 # -----------------------------
 # Save model & tokenizer

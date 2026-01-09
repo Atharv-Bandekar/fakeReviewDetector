@@ -1,6 +1,7 @@
-setup_project.py
-
-
-
-/backend/venv/
+venv/
+__pycache__/
+*.pyc
+*.pkl
+*.h5
+node_modules/
 
