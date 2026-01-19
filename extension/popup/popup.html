@@ -3,16 +3,34 @@
 <head>
   <title>Fake Review Detector</title>
   <link rel="stylesheet" href="popup.css">
+  <meta charset="UTF-8">
 </head>
 <body>
-  <h3>Fake Review Detector</h3>
-  <button id="analyze">Analyze Reviews</button>
-  <p id="result"></p>
-  <div id="result"> 
-    <h3 id="label"></h3>
-    <p id="confidence"></p>
-    <p id="explanation"></p>
+
+  <div class="container">
+    <h3>🛡️ ReviewGuard</h3>
+    
+    <textarea id="reviewInput" placeholder="Paste a review here to test..."></textarea>
+    
+    <div class="button-group">
+      <button id="analyzeBtn">Analyze Text</button>
+    </div>
+
+    <div id="resultContainer" class="hidden">
+      
+      <div id="badgeContainer">
+        <span id="labelBadge"></span>
+      </div>
+
+      <button id="explainBtn" class="secondary-btn hidden">💡 Why?</button>
+
+      <div id="explanationBox" class="hidden">
+        <div id="explanationText"></div>
+      </div>
+      
+    </div>
   </div>
+
   <script src="popup.js"></script>
 </body>
 </html>

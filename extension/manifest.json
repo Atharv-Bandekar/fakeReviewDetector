@@ -5,7 +5,7 @@
   "description": "Detects fake Amazon reviews in real time",
   "permissions": ["activeTab", "scripting"],
   "host_permissions": [
-    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*", 
     "https://www.amazon.com/*",
     "https://www.amazon.in/*",
     "https://www.amazon.co.uk/*",

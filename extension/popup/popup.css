@@ -1,4 +1,59 @@
-.fake { color: red; }
-.genuine { color: green; }
-.uncertain { color: orange; }
-#explanation { font-style: italic; margin-top: 10px; }
+/* --- Review Classification Badges --- */
+.fake, .genuine, .uncertain {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 20px;       /* Pill shape */
+    font-weight: 700;          /* Bold text */
+    font-size: 0.9rem;
+    text-transform: uppercase; /* Professional look */
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1); /* Subtle 3D lift */
+    margin-bottom: 10px;
+}
+
+/* Specific Colors */
+.fake {
+    background-color: #ffebee; /* Light Red Background */
+    color: #c62828;            /* Dark Red Text */
+    border: 1px solid #ef9a9a;
+}
+
+.genuine {
+    background-color: #e8f5e9; /* Light Green Background */
+    color: #2e7d32;            /* Dark Green Text */
+    border: 1px solid #a5d6a7;
+}
+
+.uncertain {
+    background-color: #fff3e0; /* Light Orange Background */
+    color: #ef6c00;            /* Dark Orange Text */
+    border: 1px solid #ffcc80;
+}
+
+/* --- Explanation / Insight Box --- */
+#explanation {
+    margin-top: 15px;
+    padding: 15px;
+    background-color: #f8f9fa; /* Light grey card */
+    border-left: 5px solid #4A90E2; /* Blue accent bar on the left */
+    border-radius: 4px;
+    font-style: normal;        /* Easier to read than italic */
+    font-family: 'Segoe UI', sans-serif;
+    color: #333;
+    line-height: 1.5;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+/* Optional: Add a small icon before the explanation text */
+#explanation::before {
+    content: "💡 AI Insight: ";
+    font-weight: bold;
+    color: #4A90E2;
+}
+
+/* Animation for smooth appearance */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
