@@ -4,4 +4,4 @@ __pycache__/
 *.pkl
 *.h5
 node_modules/
-
+.env

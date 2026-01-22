@@ -11,7 +11,7 @@ from transformers import DebertaV2Tokenizer, TFDebertaV2ForSequenceClassificatio
 import traceback
 
 # 1. IMPORT THE MISSING SERVICE
-from xai_service import get_explanation  # <--- THIS WAS LIKELY MISSING
+from backend.xai_service import get_explanation  # <--- THIS WAS LIKELY MISSING
 
 app = Flask(__name__)
 CORS(app)
@@ -20,7 +20,7 @@ CORS(app)
 # Configuration
 # -----------------------------
 BASE = os.path.dirname(__file__)
-MODEL_DIR = os.path.join(BASE, 'model') 
+MODEL_DIR = os.path.join(BASE, 'backend', 'model')
 
 # -----------------------------
 # Load DeBERTa Model
@@ -119,4 +119,5 @@ def explain():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000, debug=True)
+    # use_reloader=False prevents the code from running twice
+    app.run(host='0.0.0.0', port=8000, debug=True, use_reloader=False)
