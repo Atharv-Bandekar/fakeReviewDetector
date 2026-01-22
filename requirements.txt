@@ -6,6 +6,7 @@ tf-keras
 transformers
 sentencepiece
 protobuf
+textblob
 
 # Backend API
 flask
