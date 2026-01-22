@@ -1,56 +1,42 @@
-// content.js - FINAL "Unique ID" Version (Duplicate Killer)
+// content.js - "Zombie Proof" Version using DOM Locking
 
 (() => {
   const API_BASE = "http://127.0.0.1:8000";
   const PREDICT_URL = `${API_BASE}/predict`;
   const EXPLAIN_URL = `${API_BASE}/explain`;
 
-  // --- 1. STRICT SELECTORS ---
+  // --- 1. SINGLE SOURCE SELECTOR ---
   function findReviewElements() {
-    const selList = [
-      '[id^="customer_review-"]',  // The Master Key
-      '[data-hook="review"]'       
-    ];
-    
-    let allNodes = [];
-    selList.forEach(sel => {
-        const found = document.querySelectorAll(sel);
-        allNodes = [...allNodes, ...Array.from(found)];
-    });
-
-    return [...new Set(allNodes)];
-  }
-
-  // Helper to get a unique ID for every review
-  function getReviewId(node) {
-      // 1. Try to get the actual Amazon ID (Best)
-      if (node.id && node.id.startsWith('customer_review-')) {
-          return node.id;
-      }
-      // 2. Fallback: Generate a random ID and stick it to the node
-      if (!node.dataset.rgUniqueId) {
-          node.dataset.rgUniqueId = 'rg-rev-' + Math.random().toString(36).substr(2, 9);
-      }
-      return node.dataset.rgUniqueId;
+    // Only target the Master ID to prevent finding the same review twice via nested divs
+    const nodes = document.querySelectorAll('div[id^="customer_review-"]');
+    return Array.from(nodes).filter(n => n.offsetParent !== null); // Filter hidden ones
   }
 
   function extractReviews() {
+    // Force open "Read more"
     try { document.querySelectorAll('.a-expander-header a').forEach(btn => btn.click()); } catch(e) {}
 
     const reviewEls = findReviewElements();
     const reviews = [];
     
     reviewEls.forEach(el => {
-      const revId = getReviewId(el);
-
-      // 🛑 STOP DUPLICATES (Level 1: Memory Check)
-      // Check if a badge for THIS specific ID already exists anywhere in the DOM
-      if (document.getElementById(`badge-wrapper-${revId}`)) {
+      // 🔒 ZOMBIE LOCK: Check the SHARED DOM for status
+      // If ANY script (old or new) has touched this, ignore it.
+      if (el.getAttribute('data-rg-status') === 'pending' || el.getAttribute('data-rg-status') === 'done') {
           return; 
       }
+      
+      // 🛑 VISUAL LOCK: Double check if badge exists
+      if (el.querySelector('.reviewguard-wrapper')) {
+          el.setAttribute('data-rg-status', 'done');
+          return;
+      }
 
-      // 🛑 SAFETY CHECK
+      // 🛑 SAFETY CHECK: Must have stars or date
       if (!el.querySelector('.a-icon-alt') && !el.querySelector('.review-date')) return;
+
+      // ✅ CLAIM IT NOW: Mark as 'pending' immediately so no other script takes it
+      el.setAttribute('data-rg-status', 'pending');
 
       const isVerified = !!el.innerText.match(/Verified Purchase/i);
       
@@ -62,6 +48,7 @@
       if (standardBox) {
           fullText = standardBox.innerText.trim();
       } else {
+          // Video Fallback
           const clone = el.cloneNode(true);
           const junk = ['.a-profile', '.review-date', '.review-title', '.a-icon-alt', 
                         '.review-comments', '.cr-footer-line', 'button', '.helpful-button-wrapper', '.video-block'];
@@ -72,7 +59,10 @@
       fullText = fullText.replace(/Read more|Helpful|Report/gi, '').trim();
 
       if (fullText.length > 5 && fullText.includes(' ')) { 
-          reviews.push({ text: fullText, node: el, isVerified: isVerified, id: revId });
+          reviews.push({ text: fullText, node: el, isVerified: isVerified, id: el.id });
+      } else {
+          // If invalid, mark done so we don't check it again
+          el.setAttribute('data-rg-status', 'done');
       }
     });
     
@@ -140,14 +130,14 @@
   }
 
   async function annotateReview(r, result) {
-    // 🛑 STOP DUPLICATES (Level 2: Strict DOM Check)
-    // We assign a specific ID to the wrapper based on the review ID.
-    // If that ID exists, we DO NOT add another one.
-    const wrapperId = `badge-wrapper-${r.id}`;
+    // 🛑 FINAL DOM CHECK: Before appending, ensure we are the only one.
+    // We check for a unique ID on the wrapper itself.
+    const wrapperId = `rg-badge-${r.id}`;
     if (document.getElementById(wrapperId)) return;
+    if (r.node.querySelector('.reviewguard-wrapper')) return;
 
     const wrapper = document.createElement('div');
-    wrapper.id = wrapperId; // <--- THIS IS THE KEY FIX
+    wrapper.id = wrapperId; // Unique ID to prevent duplicates
     wrapper.className = 'reviewguard-wrapper';
     wrapper.style.cssText = 'margin-top:5px; margin-bottom:5px; display:flex; align-items:center; gap:10px;';
 
@@ -181,9 +171,12 @@
     } else {
         r.node.prepend(wrapper);
     }
+    
+    // ✅ MARK DONE: Officially processed
+    r.node.setAttribute('data-rg-status', 'done');
   }
 
-  // --- 4. BUTTON & TRIGGER LOGIC ---
+  // --- 4. BUTTON LOGIC ---
   let processing = false;
 
   async function analyzeAllReviews() {
@@ -196,7 +189,6 @@
       const reviews = extractReviews();
       
       if (reviews.length === 0) {
-          alert("No new reviews found. Try scrolling down!");
           processing = false;
           if (btn) { btn.textContent = '🔍 Analyze Reviews'; btn.style.opacity = '1'; }
           return;
