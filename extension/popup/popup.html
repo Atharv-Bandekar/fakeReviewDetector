@@ -1,36 +1,47 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Fake Review Detector</title>
-  <link rel="stylesheet" href="popup.css">
-  <meta charset="UTF-8">
+    <meta charset="UTF-8">
+    <title>ReviewGuard</title>
+    <link rel="stylesheet" href="popup.css">
 </head>
 <body>
 
-  <div class="container">
-    <h3>🛡️ ReviewGuard</h3>
-    
-    <textarea id="reviewInput" placeholder="Paste a review here to test..."></textarea>
-    
-    <div class="button-group">
-      <button id="analyzeBtn">Analyze Text</button>
-    </div>
+    <header>
+        <div class="logo-area">
+            <span class="icon">🛡️</span>
+            <h1>ReviewGuard</h1>
+        </div>
+        <p class="subtitle">AI-Powered Truth Detector</p>
+    </header>
 
-    <div id="resultContainer" class="hidden">
-      
-      <div id="badgeContainer">
-        <span id="labelBadge"></span>
-      </div>
+    <main>
+        <textarea id="reviewInput" placeholder="Paste a review, comment, or tweet here to analyze..."></textarea>
+        
+        <button id="analyzeBtn" class="primary-btn">
+            🔍 Analyze Text
+        </button>
 
-      <button id="explainBtn" class="secondary-btn hidden">💡 Why?</button>
+        <div id="resultContainer" class="hidden">
+            <div class="result-card">
+                <span class="label-title">VERDICT</span>
+                <div id="labelBadge" class="badge">--</div>
+                
+                <button id="explainBtn" class="secondary-btn hidden">
+                    💡 Why?
+                </button>
+            </div>
 
-      <div id="explanationBox" class="hidden">
-        <div id="explanationText"></div>
-      </div>
-      
-    </div>
-  </div>
+            <div id="explanationBox" class="hidden">
+                <div id="explanationText"></div>
+            </div>
+        </div>
+    </main>
 
-  <script src="popup.js"></script>
+    <footer>
+        <span class="status-dot"></span> System Operational
+    </footer>
+
+    <script src="popup.js"></script>
 </body>
 </html>

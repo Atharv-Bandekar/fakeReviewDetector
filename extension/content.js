@@ -1,89 +1,54 @@
-// content.js - "Zombie Proof" Version using DOM Locking
+// content.js - Final Hybrid Version (Deep Amazon Analysis + Fast Social Scanning)
 
 (() => {
   const API_BASE = "http://127.0.0.1:8000";
-  const PREDICT_URL = `${API_BASE}/predict`;
+  const PREDICT_REVIEW_URL = `${API_BASE}/predict`;         
+  const PREDICT_COMMENT_URL = `${API_BASE}/predict_comment`; 
   const EXPLAIN_URL = `${API_BASE}/explain`;
 
-  // --- 1. SINGLE SOURCE SELECTOR ---
-  function findReviewElements() {
-    // Only target the Master ID to prevent finding the same review twice via nested divs
-    const nodes = document.querySelectorAll('div[id^="customer_review-"]');
-    return Array.from(nodes).filter(n => n.offsetParent !== null); // Filter hidden ones
+  // --- 1. SITE DETECTION ---
+  const HOST = window.location.hostname;
+  let SITE_TYPE = 'UNKNOWN';
+
+  if (HOST.includes('amazon')) SITE_TYPE = 'AMAZON';
+  else if (HOST.includes('youtube')) SITE_TYPE = 'YOUTUBE';
+  else if (HOST.includes('twitter') || HOST.includes('x.com')) SITE_TYPE = 'TWITTER';
+
+  console.log(`[ReviewGuard] Active on ${SITE_TYPE}`);
+
+  // --- 2. SELECTORS ---
+  function getItemsToAnalyze() {
+    if (SITE_TYPE === 'AMAZON') {
+      const nodes = Array.from(document.querySelectorAll('div[id^="customer_review-"]'));
+      return nodes.filter(n => n.offsetParent !== null);
+    } 
+    else if (SITE_TYPE === 'YOUTUBE') {
+      return Array.from(document.querySelectorAll('#content-text'));
+    } 
+    else if (SITE_TYPE === 'TWITTER') {
+      return Array.from(document.querySelectorAll('[data-testid="tweetText"]'));
+    }
+    return [];
   }
 
-  function extractReviews() {
-    // Force open "Read more"
-    try { document.querySelectorAll('.a-expander-header a').forEach(btn => btn.click()); } catch(e) {}
-
-    const reviewEls = findReviewElements();
-    const reviews = [];
-    
-    reviewEls.forEach(el => {
-      // 🔒 ZOMBIE LOCK: Check the SHARED DOM for status
-      // If ANY script (old or new) has touched this, ignore it.
-      if (el.getAttribute('data-rg-status') === 'pending' || el.getAttribute('data-rg-status') === 'done') {
-          return; 
-      }
+  function extractText(node) {
+    if (SITE_TYPE === 'AMAZON') {
+      const standardBox = node.querySelector('[data-hook="review-body"] span') || 
+                          node.querySelector('.review-text-content span');
+      if (standardBox) return standardBox.innerText.trim();
       
-      // 🛑 VISUAL LOCK: Double check if badge exists
-      if (el.querySelector('.reviewguard-wrapper')) {
-          el.setAttribute('data-rg-status', 'done');
-          return;
-      }
-
-      // 🛑 SAFETY CHECK: Must have stars or date
-      if (!el.querySelector('.a-icon-alt') && !el.querySelector('.review-date')) return;
-
-      // ✅ CLAIM IT NOW: Mark as 'pending' immediately so no other script takes it
-      el.setAttribute('data-rg-status', 'pending');
-
-      const isVerified = !!el.innerText.match(/Verified Purchase/i);
-      
-      // --- TEXT EXTRACTION ---
-      let fullText = "";
-      const standardBox = el.querySelector('[data-hook="review-body"] span') || 
-                          el.querySelector('.review-text-content span');
-      
-      if (standardBox) {
-          fullText = standardBox.innerText.trim();
-      } else {
-          // Video Fallback
-          const clone = el.cloneNode(true);
-          const junk = ['.a-profile', '.review-date', '.review-title', '.a-icon-alt', 
-                        '.review-comments', '.cr-footer-line', 'button', '.helpful-button-wrapper', '.video-block'];
-          junk.forEach(s => clone.querySelectorAll(s).forEach(n => n.remove()));
-          fullText = clone.innerText.trim();
-      }
-
-      fullText = fullText.replace(/Read more|Helpful|Report/gi, '').trim();
-
-      if (fullText.length > 5 && fullText.includes(' ')) { 
-          reviews.push({ text: fullText, node: el, isVerified: isVerified, id: el.id });
-      } else {
-          // If invalid, mark done so we don't check it again
-          el.setAttribute('data-rg-status', 'done');
-      }
-    });
-    
-    return reviews;
-  }
-
-  // --- 2. BACKEND API ---
-  async function analyzeReviewText(text) {
-    try {
-      const res = await fetch(PREDICT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
-      });
-      if (!res.ok) return { label: 'ERR', confidence: 0.0 };
-      return await res.json();
-    } catch (e) {
-      return { label: 'ERR', confidence: 0.0 };
+      const clone = node.cloneNode(true);
+      ['.a-profile', '.review-date', '.video-block', '.review-title', '.review-comments'].forEach(s => 
+        clone.querySelectorAll(s).forEach(n => n.remove())
+      );
+      return clone.innerText.trim().replace(/Read more|Helpful|Report/gi, '');
+    } 
+    else {
+      return node.innerText.trim();
     }
   }
 
+  // --- 3. UI HELPERS ---
   async function fetchExplanation(text, label, confidence, container) {
     try {
         container.innerHTML = '<span class="loading-spinner">↻</span> <i>Asking AI...</i>';
@@ -105,119 +70,167 @@
     }
   }
 
-  // --- 3. UI HELPERS ---
-  function makeBadge(label, confidence, isVerified) {
+  function createBadge(label, confidence, isVerified) {
     const span = document.createElement('span');
-    span.className = 'reviewguard-badge';
-    span.style.cssText = 'display:inline-block;padding:2px 6px;margin-left:8px;border-radius:4px;font-weight:600;font-size:12px;color:white;vertical-align:middle;';
+    span.className = 'rg-badge';
+    span.style.cssText = 'display:inline-block; padding:2px 6px; margin:0 5px; border-radius:4px; font-weight:700; font-size:11px; color:white; vertical-align:middle; font-family:sans-serif; z-index:9999;';
     
-    let finalLabel = label;
-    let color = '#f57c00'; 
-
-    if (label === 'FAKE') {
-        if (isVerified) { finalLabel = 'SUSPICIOUS'; color = '#ff9800'; } 
-        else { color = '#e53935'; }
-    } else if (label === 'GENUINE') { color = '#43a047'; }
-
-    if (label === 'ERR') {
-        span.style.background = '#777'; span.textContent = 'Error';
+    if (label === 'FAKE' || label === 'BOT') {
+        span.style.backgroundColor = isVerified ? '#ff9800' : '#d32f2f'; 
+        span.textContent = label === 'BOT' ? `🤖 BOT ${(confidence*100).toFixed(0)}%` : `🚫 FAKE ${(confidence*100).toFixed(0)}%`;
     } else {
-        const dispConf = Math.min(confidence, 0.99) * 100;
-        span.style.background = color;
-        span.textContent = `${finalLabel} (${Math.round(dispConf)}%)`;
+        span.style.backgroundColor = '#2e7d32'; 
+        span.textContent = `✅ HUMAN ${(confidence*100).toFixed(0)}%`;
     }
-    return { span, finalLabel };
+    return span;
   }
 
-  async function annotateReview(r, result) {
-    // 🛑 FINAL DOM CHECK: Before appending, ensure we are the only one.
-    // We check for a unique ID on the wrapper itself.
-    const wrapperId = `rg-badge-${r.id}`;
-    if (document.getElementById(wrapperId)) return;
-    if (r.node.querySelector('.reviewguard-wrapper')) return;
+  // --- 4. INJECTION LOGIC ---
+  function attachBadge(node, label, confidence, isVerified, text) {
+    if (node.getAttribute('data-rg-status') === 'done') return;
+    
+    // Safety check for existing badges
+    if (node.querySelector('.rg-badge') || (node.parentElement && node.parentElement.querySelector('.rg-badge'))) {
+        node.setAttribute('data-rg-status', 'done');
+        return;
+    }
 
     const wrapper = document.createElement('div');
-    wrapper.id = wrapperId; // Unique ID to prevent duplicates
-    wrapper.className = 'reviewguard-wrapper';
-    wrapper.style.cssText = 'margin-top:5px; margin-bottom:5px; display:flex; align-items:center; gap:10px;';
+    wrapper.className = 'rg-wrapper';
+    wrapper.style.cssText = 'display:inline-flex; align-items:center; gap:5px; margin: 5px 0;';
 
-    const { span } = makeBadge(result.label, result.confidence ?? 0, r.isVerified);
-    wrapper.appendChild(span);
+    const badge = createBadge(label, confidence, isVerified);
+    wrapper.appendChild(badge);
 
-    if (result.label !== 'ERR') {
+    // 💡 AMAZON EXCLUSIVE: Add "Why?" Button
+    if (SITE_TYPE === 'AMAZON' && label !== 'ERR') {
         const btn = document.createElement('button');
         btn.textContent = '💡 Why?';
         btn.style.cssText = 'border:1px solid #ccc; background:#fff; cursor:pointer; font-size:11px; padding:2px 8px; border-radius:10px; color:#333;';
         
         const explainBox = document.createElement('div');
         explainBox.style.cssText = 'display:none; margin-top:5px; font-size:13px; color:#333; background:#f0f2f5; padding:8px; border-radius:4px; width:100%;';
-        
+
         btn.onclick = (e) => {
             e.preventDefault();
             btn.style.display = 'none'; 
             explainBox.style.display = 'block'; 
-            fetchExplanation(r.text, result.label, result.confidence, explainBox);
+            fetchExplanation(text, label, confidence, explainBox);
         };
         wrapper.appendChild(btn);
         
-        const header = r.node.querySelector('.a-profile') || r.node.querySelector('.review-header') || r.node.querySelector('.a-row');
+        // Insert Wrapper + ExplainBox for Amazon
+        const header = node.querySelector('.a-profile') || node.querySelector('.review-header');
         if (header) {
-            header.insertAdjacentElement('afterend', wrapper);
-            wrapper.insertAdjacentElement('afterend', explainBox);
+             header.parentElement.insertBefore(wrapper, header.nextSibling);
+             wrapper.insertAdjacentElement('afterend', explainBox);
         } else {
-            r.node.prepend(wrapper);
-            wrapper.insertAdjacentElement('afterend', explainBox);
+             node.prepend(wrapper);
+             wrapper.insertAdjacentElement('afterend', explainBox);
         }
-    } else {
-        r.node.prepend(wrapper);
+    } 
+    // 🚀 SOCIAL MEDIA: Badge Only (Fast)
+    else {
+        if (SITE_TYPE === 'YOUTUBE') {
+            node.parentElement.insertBefore(wrapper, node);
+        } else if (SITE_TYPE === 'TWITTER') {
+            node.parentElement.appendChild(wrapper);
+        }
     }
-    
-    // ✅ MARK DONE: Officially processed
-    r.node.setAttribute('data-rg-status', 'done');
+
+    node.setAttribute('data-rg-status', 'done');
   }
 
-  // --- 4. BUTTON LOGIC ---
+  // --- 5. PROCESSING LOOP ---
   let processing = false;
+  
+  async function runAnalysis() {
+    if (processing) return;
+    processing = true;
+    updateButton("⏳ Scanning...");
 
-  async function analyzeAllReviews() {
-      if (processing) return;
-      processing = true;
-      
-      const btn = document.getElementById('reviewguard-analyze-all');
-      if (btn) { btn.textContent = '⏳ Analyzing...'; btn.style.opacity = '0.7'; }
+    if (SITE_TYPE === 'AMAZON') {
+        try { document.querySelectorAll('.a-expander-header a').forEach(btn => btn.click()); } catch(e) {}
+    }
 
-      const reviews = extractReviews();
-      
-      if (reviews.length === 0) {
-          processing = false;
-          if (btn) { btn.textContent = '🔍 Analyze Reviews'; btn.style.opacity = '1'; }
-          return;
-      }
+    const items = getItemsToAnalyze();
+    console.log(`[ReviewGuard] Found ${items.length} items on ${SITE_TYPE}`);
 
-      console.log(`[ReviewGuard] Processing ${reviews.length} reviews...`);
+    const newItems = items.filter(i => !i.getAttribute('data-rg-status'));
 
-      const BATCH_SIZE = 3;
-      for (let i = 0; i < reviews.length; i += BATCH_SIZE) {
-          const chunk = reviews.slice(i, i + BATCH_SIZE);
-          await Promise.all(chunk.map(async (r) => {
-              const result = await analyzeReviewText(r.text);
-              await annotateReview(r, result);
-          }));
-      }
+    if (newItems.length === 0) {
+        updateButton("✅ No New Items");
+        setTimeout(() => updateButton("🔍 Scan Page"), 2000);
+        processing = false;
+        return;
+    }
 
-      processing = false;
-      if (btn) { btn.textContent = '🔍 Analyze More'; btn.style.opacity = '1'; }
+    const BATCH_SIZE = 5; 
+    for (let i = 0; i < newItems.length; i += BATCH_SIZE) {
+        const chunk = newItems.slice(i, i + BATCH_SIZE);
+        
+        await Promise.all(chunk.map(async (node) => {
+            node.setAttribute('data-rg-status', 'pending');
+            const text = extractText(node);
+            
+            if (!text || text.length < 5) {
+                node.setAttribute('data-rg-status', 'done');
+                return; 
+            }
+
+            const url = SITE_TYPE === 'AMAZON' ? PREDICT_REVIEW_URL : PREDICT_COMMENT_URL;
+            
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ text: text })
+                });
+                const data = await res.json();
+                const isVerified = SITE_TYPE === 'AMAZON' && node.innerText.includes('Verified Purchase');
+                
+                // Pass text so we can use it for explanation if needed
+                attachBadge(node, data.label, data.confidence, isVerified, text);
+            } catch (e) {
+                console.error(e);
+                node.removeAttribute('data-rg-status');
+            }
+        }));
+    }
+
+    updateButton("🔍 Scan More");
+    processing = false;
+  }
+
+  // --- 6. FLOATING BUTTON ---
+  function updateButton(text) {
+    const btn = document.getElementById('rg-float-btn');
+    if (btn) btn.textContent = text;
   }
 
   function injectButton() {
-    if (document.getElementById('reviewguard-analyze-all')) return;
+    if (document.getElementById('rg-float-btn')) return;
+
     const btn = document.createElement('button');
-    btn.id = 'reviewguard-analyze-all';
-    btn.textContent = '🔍 Analyze Reviews';
-    btn.style.cssText = `position: fixed; bottom: 20px; right: 20px; z-index: 2147483647; padding: 12px 24px; background: #232f3e; color: white; border: 2px solid white; border-radius: 50px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); cursor: pointer; transition: all 0.2s;`;
+    btn.id = 'rg-float-btn';
+    btn.textContent = '🔍 Scan Page';
+    btn.style.cssText = `
+        position: fixed; bottom: 20px; right: 20px; z-index: 2147483647;
+        padding: 12px 20px; background: #232f3e; color: #fff;
+        border: 2px solid #fff; border-radius: 30px;
+        font-family: sans-serif; font-weight: bold; cursor: pointer;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        transition: transform 0.2s;
+    `;
+    
+    if (SITE_TYPE !== 'AMAZON') {
+        btn.style.background = '#1DA1F2'; 
+        btn.style.borderColor = 'transparent';
+    }
+
     btn.onmouseover = () => btn.style.transform = 'scale(1.05)';
     btn.onmouseout = () => btn.style.transform = 'scale(1)';
-    btn.onclick = analyzeAllReviews;
+    btn.onclick = runAnalysis;
     document.body.appendChild(btn);
   }
 
